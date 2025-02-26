@@ -96,7 +96,7 @@ def call(Map configMap){
                 }
             }
             steps {
-                build job: "${configMap.component}-deploy", wait: true, parameters: [ 
+                build job: "../${configMap.component}-deploy", wait: true, parameters: [ 
                 string(name: 'version', value: "${packageVesion}"),       
                 string(name:'environment', value: "dev")]
             }
