@@ -9,7 +9,8 @@ def call(Map configMap){
         }
         environment { 
             packageVesion = ''
-            nexusURL = '172.31.37.164:8081'
+            //can maintain in pipeline globals
+            //nexusURL = '172.31.37.164:8081'
         }
         options {
             timeout(time: 1, unit: 'HOURS')
@@ -28,17 +29,79 @@ def call(Map configMap){
         }
         // build
         stages {
-            stage('Get the version') {
-                steps {
-                    script{
-                        def packageJson = readJSON file: 'package.json'
-                        packageVesion = packageJson.version
-                        echo "application version is $packageVesion"
-                    }
+        stage('Get the version') {
+            steps {
+                script{
+                    def packageJson = readJSON file: 'package.json'
+                    packageVesion = packageJson.version
+                    echo "application version is $packageVesion"
                 }
             }
-            
         }
+        stage('Install dependencies') {
+            steps {
+                sh """
+                    npm install
+                """
+            }
+        }
+
+        stage('Unit tests') {
+            steps {
+                sh """
+                    echo "unit tests will run here "
+                """
+            }
+        }
+
+        stage('Sonar Scan'){
+            steps{
+                sh """
+                    sonar-scanner
+                """
+            }
+        }
+        stage('Build') {
+            steps {
+                sh """
+                    ls -la
+                    zip -q -r ${configMap.component}.zip ./* -x ".git" -x "*.zip"
+                    ls -ltr
+                """
+            }
+        }
+        stage('Publish artifacts') {
+            steps {
+                nexusArtifactUploader(
+                    nexusVersion: 'nexus3',
+                    protocol: 'http',
+                    nexusUrl: pipelineGlobals.nexusURL(),
+                    groupId: 'com.roboshop',
+                    version: "${packageVesion}",
+                    repository: "${configMap.component}",
+                    credentialsId: 'nexus-auth',
+                    artifacts: [
+                        [artifactId: "${configMap.component}",
+                            classifier: '',
+                            file: "${configMap.component}.zip",
+                            type: 'zip']
+                    ]
+                )
+            }
+        }
+        stage('Deploy') {
+            when{
+                expression{
+                    params.Deploy == 'true'
+                }
+            }
+            steps {
+                build job: "${configMap.component}-deploy", wait: true, parameters: [ 
+                string(name: 'version', value: "${packageVesion}"),       
+                string(name:'environment', value: "dev")]
+            }
+        }
+    }
         // Post build means build ipoena tharuwatha em cheyali
         post { 
             always { 
